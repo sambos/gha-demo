@@ -1,0 +1,70 @@
+name: 'Terraform Speculative plan'
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    types: [merged, opened]
+    branches : [main, features/mybranch]
+  workflow_dispatch:
+
+env :
+  TF_CLOUD_ORGANIZATION : "myorg"
+  TF_API_TOKEN : "my-token"
+  TF_WORKSPACE : "my-workspace"
+  CONFIG_DIRECTORY : ""
+  
+
+
+jobs:
+  terraform-run:
+    name: 'Terraform'
+    runs-on: general-use
+    environment: dev
+    permissions:
+      contents: read
+      pull-requests: write
+      
+
+    # Use the Bash shell regardless whether the GitHub Actions runner is ubuntu-latest, macos-latest, or windows-latest
+    # defaults:
+    #   run:
+    #     shell: bash
+
+    steps:
+    # Checkout the repository to the GitHub Actions runner
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    # Upload Config
+    - name: upload configuration
+      uses: actions/upload-configuration@main
+      id: upload
+      with:
+       workspace: ${{env.TF_WORKSPACE}}
+       directory: ${{env.CONFIG_DIRECTORY}}
+       
+    # Create Plan
+    - name: create plan
+      uses: actions/create-run@main
+      id: create-run
+      with:
+       workspace: ${{env.TF_WORKSPACE}}
+       configuration-version: ${{steps.upload.outputs.configuration_version_id}}
+       plan_only: ${{ github.ref != 'refs/heads/main' }}
+      
+    - name: Plan output
+      uses: actions/plan-output@main
+      id: plan-outputa
+      with:
+       workspace: ${{steps.create-run.outputs.plan_id}}
+       
+    - name: Apply Run
+      uses: actions/apply-run@main
+      id: apply
+      continue-on-error: true
+      if: gitub.ref == 'refs/heads/main'
+      with:
+       workspace: ${{steps.create-run.outputs.run_id}}
+       comment: "Apply run from github actions cI ${{github.sha}}
+       
